@@ -1,0 +1,30 @@
+.upc-scroll { flex-grow: 1; min-height: 0; }
+.upc-settings, .upc-editor, .upc-picker { padding: 12px; }
+.upc-picker { flex-grow: 1; }
+.upc-heading { font-size: 18px; -unity-font-style: bold; flex-shrink: 0; margin-bottom: 8px; }
+.upc-section-title { font-size: 13px; -unity-font-style: bold; margin-top: 16px; margin-bottom: 6px; }
+.upc-title { -unity-font-style: bold; }
+.upc-subtitle { white-space: normal; opacity: 0.7; margin-top: 3px; margin-bottom: 6px; }
+.upc-wrap { white-space: normal; margin-top: 6px; margin-bottom: 6px; }
+.upc-grow { flex-grow: 1; min-width: 0; }
+.upc-row, .upc-actions { flex-direction: row; align-items: center; flex-shrink: 0; }
+.upc-actions { flex-wrap: wrap; margin-top: 8px; margin-bottom: 4px; }
+.upc-actions > Button { margin-right: 6px; margin-bottom: 4px; padding: 4px 8px; }
+.upc-badge { padding: 2px 8px; border-radius: 8px; background-color: rgba(128, 128, 128, 0.2); }
+.upc-catalogue-row { flex-direction: row; align-items: center; margin-bottom: 8px; }
+.upc-catalogue-select { flex-grow: 1; flex-direction: row; align-items: center; padding: 10px; margin-right: 8px; }
+.upc-asset-icon { width: 32px; height: 32px; margin-right: 12px; }
+.upc-empty { white-space: normal; padding: 20px 12px; background-color: rgba(128, 128, 128, 0.08); }
+.upc-card { padding: 8px; margin-bottom: 6px; border-radius: 4px; background-color: rgba(128, 128, 128, 0.08); }
+.upc-setting { margin-top: 16px; }
+.upc-error { color: rgb(218, 153, 68); }
+.upc-json { min-height: 300px; flex-grow: 1; }
+.upc-json > .unity-text-field__input { white-space: normal; }
+.upc-picker-list { flex-grow: 1; flex-basis: 0; min-height: 100px; }
+.upc-picker-row { flex-direction: row; align-items: center; padding: 6px 8px; border-bottom-width: 1px; border-bottom-color: rgba(128, 128, 128, 0.12); }
+.upc-picker-row > Toggle { margin-right: 10px; }
+
+.upc-hidden { display: none; }
+.upc-catalogue-select Label { -unity-text-align: middle-left; }
+.upc-settings > .upc-row > .upc-heading { flex-grow: 1; }
+.upc-picker-row .upc-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

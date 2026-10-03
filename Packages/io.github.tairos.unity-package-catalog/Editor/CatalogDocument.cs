@@ -12,10 +12,10 @@ namespace UnityPackageCatalog
         public int schemaVersion = 1;
         public string displayName;
         public CatalogEntry[] packages;
-        public BuiltInModuleRule[] builtInModules;
 
         public static CatalogDocument Load(string path)
         {
+            RequireExtension(path);
             return Parse(path, File.ReadAllText(path));
         }
 
@@ -38,31 +38,7 @@ namespace UnityPackageCatalog
             return added;
         }
 
-        public static void SetBuiltInModuleRules(string path, BuiltInModuleRule[] additions)
-        {
-            var document = Load(path);
-            var rules = new List<BuiltInModuleRule>(document.builtInModules ?? Array.Empty<BuiltInModuleRule>());
-            foreach (var rule in additions)
-            {
-                if (rule == null) throw new FormatException("A built-in module rule cannot be null.");
-                rules.RemoveAll(existing => existing.name == rule.name);
-                rules.Add(rule);
-            }
-            document.builtInModules = rules.ToArray();
-            Save(path, document);
-        }
-
-        public static void ClearBuiltInModuleRules(string path, string[] names)
-        {
-            var document = Load(path);
-            var selected = new HashSet<string>(names, StringComparer.Ordinal);
-            var rules = new List<BuiltInModuleRule>(document.builtInModules ?? Array.Empty<BuiltInModuleRule>());
-            rules.RemoveAll(rule => selected.Contains(rule.name));
-            document.builtInModules = rules.ToArray();
-            Save(path, document);
-        }
-
-        static void Save(string path, CatalogDocument document)
+        internal static void Save(string path, CatalogDocument document)
         {
             var json = JsonUtility.ToJson(document, true);
             Parse(path, json); // Validate the complete result before modifying the private file.
@@ -75,8 +51,15 @@ namespace UnityPackageCatalog
             finally { if (File.Exists(temporary)) File.Delete(temporary); }
         }
 
+        static void RequireExtension(string path)
+        {
+            if (!string.Equals(Path.GetExtension(path), ".upcjson", StringComparison.OrdinalIgnoreCase))
+                throw new FormatException("Catalogue assets must use the .upcjson extension.");
+        }
+
         internal static CatalogDocument Parse(string path, string json)
         {
+            RequireExtension(path);
             CatalogDocument document;
             try { document = JsonUtility.FromJson<CatalogDocument>(json); }
             catch (ArgumentException) { throw new FormatException("Catalogue is not valid JSON."); }
@@ -84,7 +67,8 @@ namespace UnityPackageCatalog
                 throw new FormatException("Expected catalogue schemaVersion 1.");
             if (string.IsNullOrWhiteSpace(document.displayName) || document.packages == null)
                 throw new FormatException("A catalogue needs displayName and packages.");
-            BuiltInModuleRule.Validate(document.builtInModules);
+            if ((JsonUtility.FromJson<BuiltInPresetDocument>(json).builtInModules?.Length ?? 0) > 0)
+                throw new FormatException("Move builtInModules into a .upcbuiltinjson preset before saving this package catalogue.");
             var names = new HashSet<string>(StringComparer.Ordinal);
             var productIds = new HashSet<long>();
             for (var index = 0; index < document.packages.Length; index++)
@@ -103,6 +87,8 @@ namespace UnityPackageCatalog
                     if (entry == null || string.IsNullOrEmpty(entry.name) ||
                         !Regex.IsMatch(entry.name, @"^[a-z0-9]+(?:[.-][a-z0-9]+)+$") || !names.Add(entry.name))
                         throw new FormatException("Package names must be valid, unique UPM IDs.");
+                    if (entry.name.StartsWith("com.unity.modules.", StringComparison.Ordinal))
+                        throw new FormatException("Built-in modules belong in a .upcbuiltinjson preset.");
                     if (string.IsNullOrWhiteSpace(entry.displayName) ||
                         !Regex.IsMatch(entry.version ?? "", @"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"))
                         throw new FormatException("Each package needs displayName and a semantic version.");
@@ -118,26 +104,6 @@ namespace UnityPackageCatalog
     }
 
     [Serializable]
-    public sealed class BuiltInModuleRule
-    {
-        public string name;
-        public string requirement;
-
-        public static void Validate(BuiltInModuleRule[] rules)
-        {
-            var names = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var rule in rules ?? Array.Empty<BuiltInModuleRule>())
-            {
-                if (rule == null || !Regex.IsMatch(rule.name ?? "", @"^com\.unity\.modules\.[a-z0-9]+$"))
-                    throw new FormatException("Built-in module rules need a com.unity.modules.* package ID.");
-                if (!names.Add(rule.name)) throw new FormatException("Duplicate or conflicting built-in module rule: " + rule.name);
-                if (rule.requirement != "required" && rule.requirement != "excluded")
-                    throw new FormatException(rule.name + ": requirement must be required or excluded.");
-            }
-        }
-    }
-
-    [Serializable]
     public sealed class CatalogEntry
     {
         public long assetStoreProductId;
@@ -146,12 +112,14 @@ namespace UnityPackageCatalog
         public string description;
         public string version;
         public string source;
+        public string group;
         [NonSerialized] public string resolvedSource;
 
         internal void ResolveSource(string directory)
         {
             if (string.IsNullOrWhiteSpace(source) || source.IndexOfAny(new[] {'\r', '\n'}) >= 0)
                 throw new FormatException("Each package needs a Git URL or file: source.");
+            if (source == "registry") { resolvedSource = version; return; }
             if (source.StartsWith("file:", StringComparison.Ordinal))
             {
                 var path = Path.GetFullPath(Path.Combine(directory, source.Substring(5)));

@@ -58,12 +58,12 @@ namespace UnityPackageCatalog
                 foreach (var target in excluded)
                 {
                     var path = FindPath(root, target, graph, new HashSet<string>(StringComparer.Ordinal));
-                    if (path != null) issues.Add("Cannot exclude " + target + ": required by " + string.Join(" → ", path) + ".");
+                    if (path != null) issues.Add("Cannot disable " + target + ": required by " + string.Join(" → ", path) + ".");
                 }
             }
             foreach (var rule in rules.Where(r => r.requirement == "excluded"))
                 if (removals.Count == 0 && current.TryGetValue(rule.name, out var package) && !package.direct &&
-                    !issues.Any(issue => issue.StartsWith("Cannot exclude " + rule.name + ":", StringComparison.Ordinal)))
+                    !issues.Any(issue => issue.StartsWith("Cannot disable " + rule.name + ":", StringComparison.Ordinal)))
                     issues.Add(rule.name + ": enabled as an indirect dependency; remove its dependent packages first.");
             return new BuiltInModulePlan { add = additions.ToArray(), remove = removals.ToArray(), errors = issues.Distinct().ToArray() };
         }
@@ -95,8 +95,8 @@ namespace UnityPackageCatalog
 
         public string Describe()
         {
-            if (errors.Length > 0) return "Module requirements cannot be applied:\n" + string.Join("\n", errors);
-            if (!HasChanges) return "All built-in module requirements are satisfied.";
+            if (errors.Length > 0) return "Built-in preset cannot be applied:\n" + string.Join("\n", errors);
+            if (!HasChanges) return "No module changes needed; selected actions are satisfied.";
             return "Enable: " + (add.Length == 0 ? "none" : string.Join(", ", add)) +
                 "\nDisable: " + (remove.Length == 0 ? "none" : string.Join(", ", remove));
         }

@@ -2,7 +2,7 @@
   "name": "io.github.tairos.unity-package-catalog",
   "version": "0.1.0-experimental.1",
   "displayName": "Unity Package Catalog",
-  "description": "An experimental Git and Asset Store catalogue inside Unity's native Package Manager. Tested against Unity 6000.6.0f1.",
+  "description": "Curated Git, local, UPM, and Asset Store collections inside Unity's native Package Manager, with Inspector authoring and Built-in module presets. Experimental Unity 6000.6 integration.",
   "unity": "6000.6",
   "samples": [
     {
@@ -17,5 +17,17 @@
   },
   "dependencies": {
     "com.unity.modules.jsonserialize": "1.0.0"
-  }
+  },
+  "keywords": [
+    "unity",
+    "editor",
+    "package-manager",
+    "upm",
+    "package-catalog",
+    "git",
+    "asset-store",
+    "built-in-presets"
+  ],
+  "documentationUrl": "https://github.com/Tairos/UnityPackageCatalog/blob/main/Packages/io.github.tairos.unity-package-catalog/README.md",
+  "license": "0BSD"
 }

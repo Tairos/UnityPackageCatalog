@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "displayName": "Example Packages",
+  "packages": [
+    {
+      "name": "com.example.catalog-alpha",
+      "version": "1.0.0",
+      "displayName": "Catalog Demo Alpha",
+      "description": "Harmless local fixture for Unity Package Catalog. Contains documentation only.",
+      "source": "file:../../Packages/io.github.tairos.unity-package-catalog/Samples~/LocalCatalog/alpha"
+    },
+    {
+      "name": "com.example.catalog-beta",
+      "version": "1.0.0",
+      "displayName": "Catalog Demo Beta",
+      "description": "Harmless local fixture for Unity Package Catalog. Contains documentation only.",
+      "source": "file:../../Packages/io.github.tairos.unity-package-catalog/Samples~/LocalCatalog/beta"
+    }
+  ]
+}

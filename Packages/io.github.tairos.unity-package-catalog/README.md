@@ -1,147 +1,185 @@
-# Unity Package Catalog
+# Unity Package Catalog — user guide
 
-A personal package catalogue inside **Unity's existing Package Manager**. Add a named source, browse your tools using Unity's native list and details panel, and install/remove packages using its normal controls. Packages can live in private Git repositories. No registry server is required.
+A Unity Editor extension for curated package collections in the native Package Manager. Combine Git repositories, local packages, UPM registry packages, and owned Asset Store items in `.upcjson` assets. Each catalogue adds a source under **Sources**. Separate `.upcbuiltinjson` presets configure engine modules through explicit Preview/Apply actions.
 
-**Experimental prototype — tested in Unity 6000.6.0f1.** The sidebar, filtering, and uninstalled package records use undocumented Unity internals. The adapter currently refuses other Unity minor versions. This is not a supported Unity extension API or a production compatibility guarantee.
+For screenshots and an overview, see [Tairos/UnityPackageCatalog](https://github.com/Tairos/UnityPackageCatalog).
 
-## Try it in this project
+**Compatibility:** tested with Unity **6000.6.0f1**. The Package Manager adapter targets Unity **6000.6** and uses undocumented internals. Other minor versions require a compatible adapter and testing. This is an experimental editor-only package.
 
-1. Open this development project in Unity 6000.6.
-2. Open **Window → Package Management → Package Catalog Settings**.
-3. Click **Use local demo catalogue**.
-4. Package Manager opens with **Example Packages** under **Sources**.
-5. Select **Catalog Demo Alpha** or **Catalog Demo Beta**, then click Unity's **Install** button.
-6. Remove it using **Manage → Remove**. It should remain available in the catalogue.
+## Installation
 
-The two demo packages contain documentation only. Nothing installs until you click Install. The integration is disabled by default on a new machine/project. This development session may already have the demo enabled.
-
-See [TESTING.md](TESTING.md) for the full checklist, verified results, and private Git testing.
-
-## Install the tool in another project
-
-This repository is a full development project with an embedded distributable package:
-
-```text
-Assets/                                  Development project content
-Packages/io.github.tairos.unity-package-catalog/
-  package.json
-  Editor/                                Catalogue, preferences, native adapter
-  Tests/Editor/                          Catalogue validation tests
-  Samples~/LocalCatalog/                 Two local demo packages
-ProjectSettings/
-```
-
-Source repository: [Tairos/UnityPackageCatalog](https://github.com/Tairos/UnityPackageCatalog).
-
-Use **Package Manager → + → Install package from Git URL** (wording may be “Add package from Git URL”) with:
+Choose **+ → Install package from Git URL** in Package Manager:
 
 ```text
 https://github.com/Tairos/UnityPackageCatalog.git?path=/Packages/io.github.tairos.unity-package-catalog
 ```
 
-Append `#YOUR-RELEASE-TAG` to pin a published release. The selected Git revision must contain the package at the path above. The consumer receives only the package subfolder. The Unity CLI/Pipeline package is a development dependency of this project, not a dependency of the distributed tool.
+Append `#<commit-or-release-tag>` with an existing revision to pin an installation. Git must be available to Unity. Unity CLI/Pipeline is used by the development project and is not required by the distributed tool.
 
-## Your private catalogue
+For local development, install the package by selecting its `package.json`, or open the repository's Unity development project.
 
-Keep your catalogue in a **separate private repository**, outside this public development checkout. Clone it using your normal Git client, then choose its `catalog.json` in Package Catalog Settings. Enable the integration and click **Apply / Reload**, then **Open in Package Manager**.
+## Create and edit a catalogue
 
-Example format (the owner/repository below are placeholders):
+1. Choose **Assets → Create → Unity Package Catalog**.
+2. Select the `.upcjson` asset and edit its **Catalogue name** in the Inspector.
+3. Add entries, then click **Save catalogue**.
+4. Click **Open in Package Manager** and select the catalogue under **Sources**.
+
+Selecting a file edits it directly in the Inspector; double-clicking focuses the Inspector. **Revert changes** reloads the saved file. Saves validate the whole catalogue and check for external edits before writing. Adding or saving entries does not install packages or download Asset Store content.
+
+The Inspector provides:
+
+| Action | Behaviour |
+|---|---|
+| **Add Git package** | Creates an entry to edit with the repository URL, package ID, display name, and version. |
+| **Add local package** | Select a folder containing `package.json`; the manifest supplies package metadata. |
+| **Add UPM package** | Searches Unity's official registry for packages compatible with the current Editor. |
+| **Add Asset Store item** | Searches purchases owned by the signed-in Unity account, with paging and checkbox selection. |
+
+Entries default to native **Git**, **Local**, **UPM**, and **Asset Store** groups. **Group override** assigns a custom collapsible group.
+
+## Project discovery and multiple catalogues
+
+Imported catalogue assets under **Assets** and **Packages** are discovered automatically. Files inside Unity-ignored folders such as `Samples~` must be imported into the project before they can be used. Plain `.json` files and external catalogue selection are not supported.
+
+**Window → Package Management → Package Catalog Settings** lists discovered catalogues and Built-in presets. Click a row to select/ping its asset; **Edit** focuses the Inspector. **Show catalogues in Package Manager** enables or disables sources for this project on this computer. It does not uninstall packages or disable preset actions.
+
+Every catalogue has its own source, identified by its asset GUID. Commit `.meta` files: moving/renaming an asset preserves its identity, while deleting it removes its source without uninstalling packages.
+
+Installed UPM packages are shared across the project. The same package ID can appear in several catalogues only when its source and version agree. Invalid edits or conflicting definitions preserve the last valid source set until corrected. The integration refreshes while Package Manager is open, waiting for current package operations to finish.
+
+## Catalogue JSON format
+
+Both custom extensions contain ordinary JSON. Package catalogue example:
 
 ```json
 {
   "schemaVersion": 1,
-  "displayName": "Tairos Packages",
+  "displayName": "Project Tools",
   "packages": [
     {
-      "name": "com.yourname.editor-tool",
-      "displayName": "My Editor Tool",
-      "description": "What this tool does.",
+      "name": "com.example.editor-tool",
+      "displayName": "Editor Tool",
+      "description": "Tools for this project.",
       "version": "1.0.0",
-      "source": "ssh://git@github.com/YOUR-ACCOUNT/YOUR-PRIVATE-TOOL.git#v1.0.0"
+      "source": "ssh://git@github.com/YOUR-ACCOUNT/YOUR-TOOL.git#v1.0.0",
+      "group": "Team Tools"
+    },
+    {
+      "assetStoreProductId": 12345,
+      "displayName": "An owned Asset Store item"
     }
   ]
 }
 ```
 
-- `displayName` at the top sets the source label in Package Manager.
-- Every Git/local package needs a unique UPM `name`, a `displayName`, a semantic `version`, and a `source`.
-- `name` and `version` must match the target package's `package.json` at the chosen revision. Local entries are checked immediately; Git entries are your responsibility until fetched.
-- Git sources accept `https://` or `ssh://` URLs, optionally with `git+`. Use `?path=/Packages/tool#v1.0.0` for a package in a repository subfolder.
-- `file:./folder` supports local development packages; paths resolve relative to the catalogue JSON.
-- `description` is optional. Uninstalled Git metadata comes from this file; this prototype does not fetch release history or repository metadata.
-- An empty `packages` array is allowed.
+The repository URL and Asset Store ID are placeholders. Replace them with your own package and an actual product you own.
 
-The prototype reads a **local checkout**. Pull remote catalogue changes yourself; the local JSON refreshes while Package Manager is open. Automatic cloning, pulling remote catalogues, and GitHub repository discovery are not implemented.
+| Field | Meaning |
+|---|---|
+| `schemaVersion` | Must be `1`. |
+| `displayName` | Catalogue label under Sources. |
+| `packages` | Entry array; may be empty. |
+| `name` | Unique UPM package ID for Git/local/registry entries. |
+| `displayName`, `version` | Required package display name and semantic version for UPM entries. |
+| `source` | Git URL, `file:` path, or `registry`. |
+| `description`, `group` | Optional description and native group override. |
+| `assetStoreProductId` | Positive, unique Asset Store product ID. Omit UPM `name`, `source`, and `version` on these entries. |
 
-### Authentication and privacy
+Built-in module IDs belong in a preset rather than `packages`.
 
-Use your computer's existing Git credential manager or SSH agent. Unity must be able to access the Git repository without an interactive password prompt. Do not embed tokens/passwords in URLs or catalogue JSON. The tool rejects HTTPS user-info and SSH password syntax.
+### Git and private GitHub packages
 
-The catalogue path and enablement are stored in Unity EditorPrefs, keyed to the local project. They are not written to a tracked project settings file. Package Manager itself records installed dependency URLs in `Packages/manifest.json` and potentially lock/cache files, so **test private packages in a separate private/disposable consumer project**, not in this public development repository.
+Sources accept `https://` and `ssh://` Git URLs, optionally prefixed with `git+`. Use `?path=/Packages/tool` for a package subfolder and `#<tag-or-commit>` for a pinned revision. The entry's ID/version should match the referenced `package.json`.
 
-No private repository is bundled or accessed by the demo. Example URLs are fictional placeholders. The tool does not manage GitHub accounts or store credentials. Unity's normal Package Manager diagnostics/telemetry still apply.
+Private repositories use Unity's normal Git installation flow and your existing SSH agent or Git credential manager. Confirm that Unity's normal **Install package from Git URL** works first. The catalogue does not manage credentials; credential-bearing URLs are rejected. Keep private repository references in a private project or collection repository.
 
-## What is implemented
+A known/installed native package record keeps Unity's real metadata and selected version. A catalogue does not automatically switch an installed package's source or version. Review those changes through Unity's native controls.
 
-- Native extension page, moved into the existing **Sources** group.
-- Native searchable/sortable package list and details view.
-- Native Install and Manage → Remove controls.
-- Synthetic metadata only for catalogue entries missing from Unity's package database.
-- Real installed package records remain owned by Unity, including actual metadata and progress.
-- Re-registration after compilation and window reopening; local enable/disable control.
-- Validation tests and a credentials-free local demo.
+### Local packages
 
-## Prototype limits
+A `file:` source must point to an existing folder containing a matching `package.json`. Relative paths resolve from the catalogue file's physical folder. ID or version mismatches are rejected before saving.
 
-- The integration uses reflection into Unity 6000.6 internals (`ExtensionPageArgs`, `PageManager`, `PackageDatabase`, and native version models). Unity updates can break it.
-- Uninstalled entries contain only one catalogue-supplied version. Automatic updates, Git tag browsing, and changing the preferred source/version of an already installed package are not implemented. Remove and reinstall to deliberately switch source/revision.
-- A package already known to Unity is shown with Unity's existing data; catalogue metadata does not overwrite it. Check the native Source/Installed From information if the same package ID exists elsewhere.
-- Native labels such as “Installed From” may appear for available local/Git entries before installation. The Install/Manage controls and installed indicator determine actual state.
-- The catalogue uses native buttons, not the original checkbox/batch-preset idea.
-- Asset Store entries use Unity-owned records and its normal Download/Import controls. Built-in engine modules can be required/excluded through catalogue rules; registry hosting is not implemented.
-- This milestone does not validate private GitHub credentials or claim compatibility beyond the tested Editor.
+The folder picker stores an absolute path. For a shareable catalogue, edit the source to a suitable relative path or use a Git/registry reference. Local paths must exist on every consumer's computer. Unity's virtual `Packages/...` asset path is not always a physical folder when a package comes from Git, cache, or an external local folder.
 
-To disable, use **Package Catalog Settings → Disable integration**. That removes this tool's source and synthetic entries, not packages you installed. If an Editor update breaks the adapter, it stops and reports a diagnostic in settings/Console. See [the architecture notes](Documentation~/ARCHITECTURE.md) before porting it.
+### Registry packages and OpenUPM
 
-Catalogue edits are checked while Package Manager is open (approximately every 0.75 seconds). Valid changes rebuild the source and its synthetic records after active package operations finish. Invalid edits keep the last valid catalogue active and show the error in settings; fix the JSON or use Apply / Reload to retry. Installed package version and source discrepancies are shown in settings diagnostics; the tool never replaces installed packages automatically. Git URL normalization can produce a source warning, so verify the installed source before acting.
+The **Add UPM package** picker uses Unity's `Client.SearchAll` API. It searches **Unity's main registry**, not OpenUPM or every project scoped registry. The search field filters those results; it is not an Internet-wide package search.
 
-## Add your Asset Store purchases
+To reference an OpenUPM or other scoped-registry package:
 
-1. Sign into Unity with the account that owns the assets.
-2. Open **Package Catalog Settings**, then choose your private catalogue or **Create private catalogue…**. Keep it outside the public tool repository; the bundled demo cannot be edited by the selection action.
-3. Click **Browse My Assets**. Use Unity's search to find and select one or more purchased/free assets.
-4. Return to settings and click **Add selected My Assets items to catalogue**.
-5. Click **Open in Package Manager**. Your catalogue now includes those assets alongside your Git/local packages.
-
-Asset Store entries use a stable numeric product ID, for example this fictional placeholder:
+1. Configure its registry URL and package scopes in **Project Settings → Package Manager**, following that registry's installation instructions.
+2. Add a JSON entry with the exact package ID/version and `"source": "registry"`.
+3. Save and use the native catalogue Install control once Unity can resolve the package.
 
 ```json
-{ "assetStoreProductId": 12345, "displayName": "Example purchased asset" }
+{
+  "name": "com.example.vendor-tool",
+  "displayName": "Vendor Tool",
+  "version": "1.2.3",
+  "source": "registry"
+}
 ```
 
-Omit `name`, `source` and `version` for these entries. The display name is optional and only a note in the catalogue; Unity supplies the displayed title, metadata and available version. Entries are filtered by purchase information for the signed-in account, including hidden purchases fetched by Unity. Missing ownership, sign-in and metadata failures appear in settings diagnostics. Use **Apply / Reload** to retry failed fetches.
+This is a placeholder entry, not a published package. For OpenUPM use the package's [manual installation instructions](https://openupm.com/docs/getting-started), including `https://package.openupm.com` and its correct scopes. If Unity cannot resolve a package through **Install package by name**, fix registry configuration before troubleshooting the catalogue.
 
-This is a curated selection, rather than an automatic mirror of your entire account. Catalogue files contain references, not licensed asset files or credentials. Unity performs all entitlement checks, downloads and imports. Adding an entry never downloads or imports it automatically. Import opens Unity's usual asset import workflow; removal follows whichever native controls Unity provides for that asset rather than UPM dependency removal. Disabling the integration leaves Unity's asset records and imported content intact.
+The tool does not configure registries, publish packages, search OpenUPM directly, or operate a registry server. Unity's [SearchAll documentation](https://docs.unity.com/en-us/engine/6000.6/script-reference/unityeditor/packagemanager/client/searchall) describes the main-registry discovery boundary.
 
-Package identity: `io.github.tairos.unity-package-catalog`. Maintained by [Tairos](https://github.com/Tairos). The lowercase reverse-domain identifier is distinct from the display name and the Git repository URL.
+## Asset Store collections
 
-## Require or exclude built-in modules
+Sign in to Unity and use **Add Asset Store item** to search owned purchases. Select across pages, then **Add selected** to place references in the draft. Existing entries are marked to prevent duplicates. Save before browsing them in Package Manager.
 
-In Package Catalog Settings, choose an external catalogue, click **Browse Built-in modules**, and select modules in Unity's native Built-in list. Back in settings, choose **Require selected Built-in modules** or **Exclude selected Built-in modules**. Use **Clear requirements for selected Built-in modules** to leave their state unmanaged again.
+Unity owns authentication, ownership checks, product metadata, Download, and Import. A shared catalogue stores product IDs and optional labels; it does not bundle purchased content, store credentials, or grant another user access to products they do not own. Unowned/unavailable products may not appear. Asset Store import/removal follows Unity's normal asset workflow rather than UPM Remove.
 
-These actions save rules and enable the catalogue; they do not enable or disable modules immediately. Click **Check module requirements / preview changes**, then **Apply module requirements** to apply the valid plan through Unity's Package Manager. Ruled modules appear alongside packages in the catalogue using Unity's normal details and Enable/Disable controls.
+If the picker fails, confirm sign-in and connectivity, then choose **Refresh**. If a product is missing from a source, check **My Assets** and its ownership/availability. You can turn catalogue integration off and on to retry a stopped integration.
 
-Rules are optional top-level JSON metadata and can coexist with Git/local and Asset Store entries:
+## Built-in module presets
+
+Choose **Assets → Create → Unity Built-in Preset**, then select the `.upcbuiltinjson` asset in the Inspector. Use **Add Built-in module**, select modules available in the current Editor, and choose **Enable** or **Disable**.
+
+**Preview changes** and **Apply preset** save the draft first. Preview discovers the current Editor's available modules and installed dependency graph. Apply executes only this preset through Unity's Package Manager, then verifies the result; script reloads do not repeat the mutation.
+
+Unlisted modules remain unchanged. Presets are independent one-time actions: they do not merge across files, apply automatically, enforce builds, or add catalogue sources. Opposing presets can coexist. Unity's existing **Built-in** view shows current module state.
 
 ```json
-"builtInModules": [
-  { "name": "com.unity.modules.audio", "requirement": "required" },
-  { "name": "com.unity.modules.vehicles", "requirement": "excluded" }
-]
+{
+  "schemaVersion": 1,
+  "displayName": "Engine Modules",
+  "unityVersion": "6000.6.0f1",
+  "builtInModules": [
+    { "name": "com.unity.modules.audio", "requirement": "required" },
+    { "name": "com.unity.modules.vehicles", "requirement": "excluded" }
+  ]
+}
 ```
 
-`required` means enabled; `excluded` means absent from the resolved dependency graph, including indirect dependencies. Only built-in engine IDs under `com.unity.modules.*` are supported. Duplicate/conflicting rules and unknown requirements are rejected. The installed Editor supplies the module version.
+`required` means enable when applying; `excluded` means disable. A module may appear only once per preset. The recorded Unity version is informative: a different current version shows a notice, and availability is checked against the running Editor. Missing modules and retained package dependencies block changes. `com.unity.modules.jsonserialize` cannot be disabled while this tool depends on it.
 
-The tool reports conflicts before applying anything when a retained package or another required module needs an excluded module. Exclude dependent built-in modules together where appropriate; other dependent packages must be managed separately. This tool needs JSONSerialize and declares it as a dependency, so `com.unity.modules.jsonserialize` cannot be excluded while the tool is installed.
+For older mixed catalogues, move `builtInModules` into a `.upcbuiltinjson` preset and remove the field from the `.upcjson` file. Mixed documents are rejected before rules can be silently lost. The old `.upcbuiltin` extension is no longer supported; rename the file together with its `.meta`, preferably through Unity's Project window.
 
-Native Enable/Disable controls remain available. When the active catalogue is enabled, a build check stops builds if its required/excluded rules are violated. Loading, reloading, or editing a catalogue never applies module changes automatically. Disabling the catalogue stops enforcement and leaves module states unchanged. Settings remain local to this computer/project; CI or another user's Editor must configure and enable the intended catalogue too. Disabling an engine module can make project scripts that use its APIs fail compilation, so preview the dependency plan and test changes in a disposable project first.
+## Distribute a collection package
+
+A collection package can contain its own `package.json` and `.upcjson`. Keep optional tools out of that package's dependencies so they install only when requested. You can list this catalogue tool as a normal dependency if it is available through a configured registry; a Git URL is not a supported package-manifest dependency reference.
+
+In a repository with `Packages/collection`, `Packages/tool-a`, and `Packages/tool-b`, install the collection using `?path=/Packages/collection`. Its entries can reference tool-a/tool-b with separate Git paths, or configured registry IDs, alongside Asset Store references.
+
+Catalogue assets shipped inside installed packages are discovered automatically; Unity-ignored folders are excluded. Treat installed collection files as distribution content: copy a catalogue into Assets if you want a project-specific editable variant, and keep definitions for shared package IDs aligned.
+
+Updating the collection package brings a revised catalogue. Pushing new folders or Git tags does not update already installed collections automatically. Repository scanning, automatic catalogue generation, cloning, and pulling remain future work.
+
+## Examples, testing, and troubleshooting
+
+The development project's `Assets/PackageCatalogs/Example Packages.upcjson` references two documentation-only local fixtures. Consumers can import **Local catalogue smoke test** from this package's Samples in Package Manager; the `.upcjson`, alpha, and beta folders are imported together so their relative paths resolve.
+
+- **No catalogue source:** confirm the extension, successful asset import, compatibility, and integration toggle. Correct any Preferences validation message.
+- **Missing script warning after upgrading:** reimport the asset and wait for compilation; importers have matching script filenames and custom Inspector editors.
+- **Invalid catalogue:** select it for repair in the Inspector. Correct the JSON or restore a valid version; the last valid source set remains active while open.
+- **Conflicting package definitions:** align the source/version for that ID across catalogues.
+- **Cannot disable a module:** read Preview's dependency chain and adjust the selected preset or retained package dependencies.
+- **Integration stopped:** inspect the diagnostic in Preferences/Console, correct the cause, and turn the integration off and on to retry.
+
+See [TESTING.md](TESTING.md) for verified checks and release follow-ups, [architecture](Documentation~/ARCHITECTURE.md) for the adapter boundary, and [public release preparation](Documentation~/PUBLISHING.md) for repository metadata and remaining decisions. Include exact Unity/OS versions and redacted reproduction steps in issues.
+
+## License
+
+Licensed under [0BSD](LICENSE.md), allowing use, modification, and redistribution without an attribution requirement. Referenced packages and Asset Store content retain their own licenses.

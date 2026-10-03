@@ -17,7 +17,7 @@ namespace UnityPackageCatalog.Tests
         { name = "com.example.tool", displayName = "Example Tool", description = "Example", version = "1.0.0", source = source };
         CatalogDocument Load(params CatalogEntry[] entries)
         {
-            var path = Path.Combine(directory, "catalog.json");
+            var path = Path.Combine(directory, "catalog.upcjson");
             File.WriteAllText(path, JsonUtility.ToJson(new CatalogDocument { displayName = "Example Packages", packages = entries }));
             return CatalogDocument.Load(path);
         }
@@ -52,7 +52,7 @@ namespace UnityPackageCatalog.Tests
         }
         [Test] public void UnsupportedSchemaIsRejected()
         {
-            var path = Path.Combine(directory, "catalog.json");
+            var path = Path.Combine(directory, "catalog.upcjson");
             File.WriteAllText(path, "{\"schemaVersion\":2,\"displayName\":\"Example\",\"packages\":[]}");
             Assert.Throws<FormatException>(() => CatalogDocument.Load(path));
         }
@@ -80,55 +80,52 @@ namespace UnityPackageCatalog.Tests
 
         [Test] public void MalformedCatalogueHasClearError()
         {
-            var path = Path.Combine(directory, "catalog.json");
+            var path = Path.Combine(directory, "catalog.upcjson");
             File.WriteAllText(path, "invalid json");
             Assert.That(Assert.Throws<FormatException>(() => CatalogDocument.Load(path)).Message,
                 Is.EqualTo("Catalogue is not valid JSON."));
         }
 
-        [Test] public void RefreshDetectsEditsRetainsValidDocumentAndRecoversAfterMissingFile()
+        [Test] public void RefreshDetectsProjectEditsAndRetainsValidDocumentDuringInvalidEdit()
         {
             const BindingFlags flags = BindingFlags.Static | BindingFlags.NonPublic;
             var type = typeof(NativeCatalogBridge);
             if (type.GetField("manager", flags).GetValue(null) != null)
                 Assert.Ignore("Run refresh state test with Package Manager closed.");
-            var fields = new[] { "document", "observedJson", "refreshError", "observedReadFailure", "openRequested" }
+            var fields = new[] { "document", "observedJson", "refreshError", "openRequested", "sources", "requestedPageId" }
                 .Select(name => type.GetField(name, flags)).ToArray();
             var saved = fields.Select(field => field.GetValue(null)).ToArray();
             var refresh = type.GetMethod("RefreshDocument", flags);
-            var path = Path.Combine(directory, "catalog.json");
+            var path = "Assets/UPCRefresh_" + Guid.NewGuid().ToString("N") + ".upcjson";
+            void Write(params CatalogEntry[] entries)
+            {
+                File.WriteAllText(path, JsonUtility.ToJson(new CatalogDocument { displayName = "Refresh test", packages = entries }));
+                UnityEditor.AssetDatabase.ImportAsset(path);
+            }
             try
             {
-                fields[0].SetValue(null, null);
-                fields[1].SetValue(null, null);
-                fields[2].SetValue(null, null);
-                fields[3].SetValue(null, false);
-                Load(Entry());
-                refresh.Invoke(null, new object[] { path });
-                var first = (CatalogDocument)fields[0].GetValue(null);
-                Assert.That(first.packages.Length, Is.EqualTo(1));
-                Load();
-                refresh.Invoke(null, new object[] { path });
+                fields[0].SetValue(null, null); fields[1].SetValue(null, null); fields[2].SetValue(null, null); fields[3].SetValue(null, false);
+                Write(Entry()); refresh.Invoke(null, Array.Empty<object>());
+                Assert.That(((CatalogDocument)fields[0].GetValue(null)).packages.Any(entry => entry.name == "com.example.tool"), Is.True);
+                Write(); refresh.Invoke(null, Array.Empty<object>());
                 var updated = (CatalogDocument)fields[0].GetValue(null);
-                Assert.That(updated.packages, Is.Empty);
-                File.WriteAllText(path, "invalid json");
-                refresh.Invoke(null, new object[] { path });
-                Assert.That(fields[0].GetValue(null), Is.SameAs(updated));
-                Assert.That(fields[2].GetValue(null), Is.Not.Null);
-                Load();
-                refresh.Invoke(null, new object[] { path });
-                Assert.That(fields[2].GetValue(null), Is.Null);
-                File.Delete(path);
-                refresh.Invoke(null, new object[] { path });
-                Assert.That(fields[2].GetValue(null), Is.Not.Null);
-                Load();
-                refresh.Invoke(null, new object[] { path });
-                Assert.That(fields[2].GetValue(null), Is.Null);
+                Assert.That(updated.packages.Any(entry => entry.name == "com.example.tool"), Is.False);
+                File.WriteAllText(path, "invalid json"); refresh.Invoke(null, Array.Empty<object>());
+                Assert.That(fields[0].GetValue(null), Is.SameAs(updated)); Assert.That(fields[2].GetValue(null), Is.Not.Null);
+                Write(); refresh.Invoke(null, Array.Empty<object>()); Assert.That(fields[2].GetValue(null), Is.Null);
             }
             finally
             {
+                UnityEditor.AssetDatabase.DeleteAsset(path);
                 for (var i = 0; i < fields.Length; i++) fields[i].SetValue(null, saved[i]);
             }
+        }
+
+        [Test] public void PlainJsonCatalogueIsRejected()
+        {
+            var path = Path.Combine(directory, "catalog.json");
+            File.WriteAllText(path, JsonUtility.ToJson(new CatalogDocument { displayName = "Test", packages = Array.Empty<CatalogEntry>() }));
+            Assert.That(Assert.Throws<FormatException>(() => CatalogDocument.Load(path)).Message, Does.Contain(".upcjson"));
         }
 
         [Test] public void AssetStoreEntryUsesProductIdWithoutUpmMetadata()
@@ -156,7 +153,7 @@ namespace UnityPackageCatalog.Tests
         [Test] public void AddingAssetsPreservesGitEntriesAndDeduplicatesSelection()
         {
             Load(Entry());
-            var path = Path.Combine(directory, "catalog.json");
+            var path = Path.Combine(directory, "catalog.upcjson");
             var additions = new[] { new CatalogEntry { assetStoreProductId = 12345 }, new CatalogEntry { assetStoreProductId = 12345 } };
             Assert.That(CatalogDocument.AddAssetStoreEntries(path, additions), Is.EqualTo(1));
             Assert.That(CatalogDocument.AddAssetStoreEntries(path, additions), Is.Zero);
@@ -167,7 +164,7 @@ namespace UnityPackageCatalog.Tests
         [Test] public void InvalidAdditionDoesNotOverwriteCatalogue()
         {
             Load(Entry());
-            var path = Path.Combine(directory, "catalog.json");
+            var path = Path.Combine(directory, "catalog.upcjson");
             var before = File.ReadAllText(path);
             var invalid = Entry(); invalid.assetStoreProductId = 12345;
             Assert.Throws<FormatException>(() => CatalogDocument.AddAssetStoreEntries(path, new[] { invalid }));

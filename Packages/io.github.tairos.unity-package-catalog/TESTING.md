@@ -1,83 +1,71 @@
-# Test guide — experimental milestones 3 and 4
+# Testing Unity Package Catalog
 
-## Verified during implementation
+Current automated run: **55 EditMode tests passed, 0 failed** on **Unity 6000.6.0f1**. Other Unity minor versions are not supported by the current Package Manager adapter.
 
-In the running **Unity 6000.6.0f1** Editor:
+## Verified behaviour
 
-| Check | Result |
+| Check | Evidence |
 |---|---|
-| Embedded package compiles | Passed |
-| Catalogue validation and update tests | 44 passed, 0 failed |
-| Named source beneath Sources | Passed; inspected in the actual window |
-| Two uninstalled entries in Unity's native list/details | Passed |
-| Native search filters to one matching entry | Passed |
-| Native Install on a local demo | Passed; actual installed state confirmed |
-| Native Manage → Remove | Passed; entry returns as available |
-| Script recompilation/domain reload | Passed; source and entries recover |
-| Close and reopen Package Manager | Passed |
-| Disable integration | Passed |
-| Private GitHub installation via SSH | Verified in the earlier prototype session recorded in the handoff, including removal and reinstall |
-| Full Editor restart / another Unity patch / another machine | Manual checks below |
+| Catalogue schema, IDs, sources, versions, and local manifest validation | Automated tests |
+| Plain `.json` rejection; discovery, move/delete, and GUID stability | Automated tests |
+| Invalid edits retain the last valid source set; conflicting package definitions rejected | Automated tests |
+| `.upcbuiltinjson` validation, opposing preset independence, availability, version notice, and dependency planning | Automated tests |
+| Unlisted modules unchanged by the planner; preset preview works with catalogue integration disabled | Automated tests and live preview |
+| Importer/main-asset MonoScript references; inline Inspector controls, save, and dirty-state tracking | Automated attached-panel tests and live Inspector checks |
+| Sidebar rebuild preserves one catalogue row under Sources | Regression test and live undock/recompile check |
+| Mixed Git/local/registry/Asset Store catalogue with native groups, details, Install, and Download controls | Live disposable consumer; README screenshots |
+| Discovery of a catalogue inside an installed package | Live consumer import/discovery check, then temporary files removed |
+| Multiple source entries, Preferences asset selection, scrolling, and recompile/reopen recovery | Live consumer; earlier implementation checks |
+| Local package Install/Remove; removed package remains listed | Earlier live consumer checks |
+| Private GitHub installation through SSH, removal, and reinstall | Earlier prototype checks |
+| Owned Asset Store purchase picker, filtering/paging, and selection retention | Earlier live checks; README picker capture |
+| Native Import control for an already downloaded owned product | Earlier live UI check; complete download/import lifecycle remains a release follow-up |
+| Built-in mutation and reload verification | Earlier service flow tested by disabling/restoring Vehicles; current independent-preset preview and planner are verified |
 
-An initial compiler warning was corrected. The final compilation check reports no compilation errors. This table records exercised behaviour, not support for all Unity versions.
+These results describe exercised behaviour, not support for every Unity version or all authentication/network states. Screenshot preparation did not install packages, download Asset Store content, or apply engine-module changes.
 
-## Repeat the local UI test
+## Development example
 
-1. Open this project with Unity 6000.6. Let compilation finish.
-2. Open **Window → Package Management → Package Catalog Settings**.
-3. Click **Use local demo catalogue**. Expect Package Manager to open on **Sources → Example Packages**.
-4. Expect **Catalog Demo Alpha** and **Catalog Demo Beta**, version 1.0.0. Select either: its native details and Install control should appear.
-5. Click **Install**. Expect an installed indicator and **Manage** controls. The other package should remain available.
-6. Select **Manage → Remove** and confirm. Expect the entry to remain in this source, with Install available again. No game assets are deleted; these are disposable documentation-only fixtures.
-7. Search for `Beta`. Only Beta should remain visible. Clear the search.
-8. Switch to **All Packages**, **Unity Registry**, and **Built-in**, then return. The catalogue should remain selectable without duplicate source rows.
-9. Close Package Manager and reopen it using **Window → Package Management → Package Catalog**.
-10. Trigger a script recompile or restart the Editor. Open the catalogue again; expect exactly one source and both entries. The adapter can return you to All Packages during teardown; reselect the source if necessary.
-11. In settings, click **Disable integration**. Expect the source to disappear. Installed packages, if any, must remain installed in All Packages. Re-enable with **Use local demo catalogue**.
-12. Remove demo packages after testing. Their temporary absolute local paths should disappear from the project's manifest/lock file.
+Open the repository's development project in Unity 6000.6.0f1. `Assets/PackageCatalogs/Example Packages.upcjson` references two harmless documentation-only local packages. In Package Manager, choose **Sources → Example Packages**.
 
-The demo's source name is deliberately generic. To test your own label, copy the catalogue and its alpha/beta folders outside the public checkout, change `displayName`, and select that JSON in settings.
+1. Select Alpha/Beta and verify native details and Install.
+2. Install a demo, then use **Manage → Remove**. It should remain listed and available to reinstall.
+3. Search for one name, clear the search, switch sources, undock/redock, and close/reopen Package Manager. Each catalogue should appear once under Sources.
+4. Select the catalogue in the Project window. Editing should happen in the Inspector without a missing-script warning or separate catalogue window.
+5. Turn **Show catalogues in Package Manager** off/on in Package Catalog Settings. Existing installed packages should remain installed.
+6. Remove demo packages after testing so temporary local paths do not remain in the public project's manifest/lock file.
 
-## Editor tests
+Consumers can also import the **Local catalogue smoke test** sample from Package Manager. Import its catalogue and both fixture folders together so relative sources resolve.
 
-Open **Window → General → Test Runner**, select **EditMode**, and run `UnityPackageCatalog.Tests`. Tests cover duplicate IDs, schema version, Git tag/subfolder preservation, credential-bearing URL rejection, local path resolution, local identity mismatch, and empty catalogues. They do not install packages or contact GitHub.
+## Authoring and preset checks
 
-For CLI users with Pipeline installed, run `unity command run_tests --mode editor --filter UnityPackageCatalog --async_tests true --project-path <project>` and poll `unity command test_status --project-path <project>`.
+Use a disposable consumer for installation/module changes.
 
-## Private Git test — use a separate consumer project
+- Create two `.upcjson` assets. Add Git, local, Unity Registry, and owned Asset Store entries using the Inspector. Check duplicate selection prevention, Save, Revert, external-edit detection, and unsaved-change prompts when changing selection.
+- Save malformed JSON and mismatched local package IDs/versions. The asset should remain selectable for repair; the native source set should retain its last valid state.
+- Create opposing `.upcbuiltinjson` presets. Both should be valid independent assets, with no custom Package Manager source or build enforcement.
+- Preview modules unavailable in the current Editor and modules needed by retained dependencies; expect clear errors. Preview must not change the manifest.
+- Apply a harmless preset in the disposable project, wait for resolution/recompile, verify its result through Built-in, then restore the original module state with another explicit preset.
+- Try catalogue files distributed inside an installed collection package; only imported assets outside ignored folders should appear.
 
-Do not put private dependency URLs into the public development project's manifest.
+## Automated tests
 
-1. Create a disposable Unity 6000.6 project and install this tool from disk (choose its `package.json`) or your published Git URL.
-2. Create a small package in your own private Git repository. Its root (or selected subfolder) needs `package.json`; start with a README-only package. Set its name and version, and create a matching Git tag.
-3. Confirm your Git client can access that repository non-interactively using SSH/credential-manager authentication. Do not put passwords or tokens in the catalogue.
-4. In a separate private catalogue checkout, create the JSON described in README. Use the exact package name, version, Git URL, and tag.
-5. Choose that JSON in Package Catalog Settings, enable integration, and Apply / Reload.
-6. Open the catalogue. Select the uninstalled entry, inspect its metadata, and click the native Install button.
-7. Verify the actual installed package's name, version and Git source. It must show up under All Packages too.
-8. Use Manage → Remove. Expect the package to uninstall and remain available in the catalogue.
-9. Restart Unity and repeat. Report any Console error or incorrect state.
+In Unity, open **Window → General → Test Runner**, choose **EditMode**, and run `UnityPackageCatalog.Tests`.
 
-If the same URL fails through Unity's normal **Install package from Git URL**, resolve the package/authentication problem first. If normal installation works but catalogue installation fails, that is an adapter issue.
+If Unity CLI is installed, run against the development project:
 
-## Reporting an issue
+```sh
+unity test /path/to/UnityPackageCatalog --mode EditMode --output /tmp/upc-tests.xml --timeout 240
+```
 
-Include the exact Unity version, OS, settings diagnostic, and which numbered step failed. Redact private URLs, local personal paths, and credentials from logs/screenshots. Do not include private catalogues or project manifests in public issues.
+Keep generated XML/logs and test-only catalogues out of the public repository. Automated tests use documentation-only fixtures and public Search/List for module preview; they do not install private Git packages or download/import Asset Store content.
 
-Catalogue edits are checked while Package Manager is open (approximately every 0.75 seconds). Valid changes rebuild the source and its synthetic records after active package operations finish. Invalid edits keep the last valid catalogue active and show the error in settings; fix the JSON or use Apply / Reload to retry. Installed package version and source discrepancies are shown in settings diagnostics; the tool never replaces installed packages automatically. Git URL normalization can produce a source warning, so verify the installed source before acting.
+## Release follow-ups
 
-## Asset Store catalogue checks (Unity 6000.6)
+- Full Editor restart and recovery with current file types.
+- Installation through the published Git URL into another clean consumer and, separately, another machine.
+- Current independent Built-in preset Apply/restore, including recompilation.
+- Complete Asset Store download/import in a disposable project; signed-out, unowned, unavailable/hidden product, network failure, and retry states.
+- Explicit compatibility testing before introducing adapters for other Unity minor versions.
 
-- Validation and file-update suite: 24 EditMode cases, including mixed Git/Asset Store entries, positive/unique product IDs, rejecting ambiguous UPM metadata, preserving Git entries, deduplicating selections, and preserving the file on invalid additions.
-- In the disposable consumer, the signed-in account's owned native asset record appeared under the custom Sources entry with native Download enabled.
-- The My Assets selection action added an owned item to a temporary external catalogue. No asset was downloaded or imported as part of this check.
-- An already downloaded owned asset showed an enabled, visible native Import control under the custom source. Complete an actual download/import in a disposable project before release.
-- Check sign-out/sign-in, an unowned or unavailable product ID, network failure/retry, hidden purchases, and removal/reimport before release. These lifecycle scenarios are not claimed as verified by validation tests.
-
-## Built-in module requirement checks
-
-- Full EditMode suite: 44 passed, including schema validation, required/excluded plans, unavailable modules, direct and indirect dependency conflicts, removing dependent modules together, the tool's JSONSerialize dependency, build enforcement, safe rule editing/clearing, and preservation of rules when adding Asset Store entries.
-- An asynchronous discovery/preview test exercised Unity's real SearchAll/List APIs without mutating the development project's modules.
-- Disposable consumer smoke test: excluded `com.unity.modules.vehicles`, verified it absent, required it again, and verified restoration through the catalogue Apply service and native UPM. The consumer manifest returned to its original contents. The apply service keeps the rule snapshot across domain reload and verifies the result rather than repeating the mutation.
-- Manual UI check: browse Built-in, select modules, save required/excluded rules, preview the plan, apply it, and confirm the same native module records appear in the catalogue. Violate a rule with native controls and confirm the build check reports it. Clear the rule or disable integration and confirm the module state is not changed automatically.
-- The supplied demo catalogue intentionally has no module rules, so trying the demo never changes engine modules.
+For issues, include exact Unity/OS versions, reproduction steps, expected/actual behaviour, and redacted Console diagnostics. Do not attach private catalogues, credential-bearing URLs, or personal manifests.

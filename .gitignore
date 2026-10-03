@@ -112,3 +112,8 @@ InitTestScene*.unity*
 TestResults/
 LocalCatalogs/
 *.private.json
+
+*.private.upcjson
+*.private.upcjson.meta
+*.private.upcbuiltinjson
+*.private.upcbuiltinjson.meta

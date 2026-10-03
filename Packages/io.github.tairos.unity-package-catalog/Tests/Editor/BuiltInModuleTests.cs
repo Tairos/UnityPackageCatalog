@@ -3,7 +3,6 @@ using System.Collections;
 using System.IO;
 using System.Linq;
 using NUnit.Framework;
-using UnityEditor.Build;
 using UnityEngine;
 using UnityEngine.TestTools;
 
@@ -89,47 +88,48 @@ namespace UnityPackageCatalog.Tests
             Assert.Throws<FormatException>(() => BuiltInModuleRule.Validate(new[] { Rule(name, requirement) }));
         [Test] public void ContradictoryRulesAreRejected() => Assert.Throws<FormatException>(() =>
             BuiltInModuleRule.Validate(new[] { Rule(Audio, "required"), Rule(Audio, "excluded") }));
-        [Test] public void BuildValidationReportsMissingAndExcludedModules()
+        [Test] public void VerificationReportsMissingAndExcludedModules()
         {
-            var rules = new[] { Rule(Audio, "required"), Rule(Physics, "excluded") };
-            var installed = new[] { Module(Physics) };
-            Assert.That(BuiltInModulePlan.Violations(rules, installed), Has.Length.EqualTo(2));
-            Assert.Throws<BuildFailedException>(() => BuiltInModuleRequirements.ValidateRulesForBuild(rules, installed));
+            Assert.That(BuiltInModulePlan.Violations(new[] { Rule(Audio, "required"), Rule(Physics, "excluded") }, new[] { Module(Physics) }), Has.Length.EqualTo(2));
         }
-        [Test] public void BuildValidationAllowsSatisfiedRequirements() =>
-            Assert.DoesNotThrow(() => BuiltInModuleRequirements.ValidateRulesForBuild(new[] { Rule(Audio, "required") }, new[] { Module(Audio) }));
-        [Test] public void ModuleRuleEditingPreservesPackagesAndAssetSelectionPreservesRules()
+        [Test] public void OpposingPresetsAreIndependent()
         {
-            var path = Path.Combine(Path.GetTempPath(), "upc-modules-" + Guid.NewGuid() + ".json");
+            var enable = BuiltInPresetDocument.Parse("enable.upcbuiltinjson", JsonUtility.ToJson(new BuiltInPresetDocument { displayName = "Enable", builtInModules = new[] { Rule(Audio, "required") } }));
+            var disable = BuiltInPresetDocument.Parse("disable.upcbuiltinjson", JsonUtility.ToJson(new BuiltInPresetDocument { displayName = "Disable", builtInModules = new[] { Rule(Audio, "excluded") } }));
+            Assert.That(BuiltInModulePlan.Create(enable.builtInModules, new[] { Module(Audio) }, Array.Empty<ModulePackageState>()).add, Has.Length.EqualTo(1));
+            Assert.That(BuiltInModulePlan.Create(disable.builtInModules, new[] { Module(Audio) }, Array.Empty<ModulePackageState>()).HasChanges, Is.False);
+        }
+        [Test] public void InvalidPresetSaveDoesNotModifyFile()
+        {
+            var path = Path.Combine(Path.GetTempPath(), "upc-preset-" + Guid.NewGuid() + ".upcbuiltinjson");
             try
             {
-                File.WriteAllText(path, JsonUtility.ToJson(new CatalogDocument { displayName = "Test", packages = new[] { new CatalogEntry { assetStoreProductId = 12345 } } }));
-                CatalogDocument.SetBuiltInModuleRules(path, new[] { Rule(Audio, "required") });
-                CatalogDocument.SetBuiltInModuleRules(path, new[] { Rule(Audio, "excluded") });
-                CatalogDocument.AddAssetStoreEntries(path, new[] { new CatalogEntry { assetStoreProductId = 12346 } });
-                var result = CatalogDocument.Load(path);
-                Assert.That(result.packages, Has.Length.EqualTo(2));
-                Assert.That(result.builtInModules, Has.Length.EqualTo(1));
-                Assert.That(result.builtInModules[0].requirement, Is.EqualTo("excluded"));
-                var before = File.ReadAllText(path);
-                Assert.Throws<FormatException>(() => CatalogDocument.SetBuiltInModuleRules(path, new[] { Rule(Audio, "invalid") }));
+                var preset = new BuiltInPresetDocument { displayName = "Test", builtInModules = new[] { Rule(Audio, "required") } };
+                File.WriteAllText(path, JsonUtility.ToJson(preset));
+                var before = File.ReadAllText(path); preset.builtInModules[0].requirement = "invalid";
+                Assert.Throws<FormatException>(() => BuiltInPresetDocument.Save(path, preset));
                 Assert.That(File.ReadAllText(path), Is.EqualTo(before));
             }
             finally { File.Delete(path); }
         }
-        [Test] public void ClearingRulesPreservesOtherRulesAndPackages()
+        [Test] public void MixedCatalogueIsRejectedBeforeRulesCanBeLost() =>
+            Assert.Throws<FormatException>(() => CatalogDocument.Parse("mixed.upcjson", "{\"schemaVersion\":1,\"displayName\":\"Mixed\",\"packages\":[],\"builtInModules\":[{\"name\":\"com.unity.modules.audio\",\"requirement\":\"required\"}]}"));
+        [Test] public void PresetRejectsPackagesAndWrongExtension()
         {
-            var path = Path.Combine(Path.GetTempPath(), "upc-modules-clear-" + Guid.NewGuid() + ".json");
-            try
-            {
-                File.WriteAllText(path, JsonUtility.ToJson(new CatalogDocument { displayName = "Test", packages = new[] { new CatalogEntry { assetStoreProductId = 12345 } },
-                    builtInModules = new[] { Rule(Audio, "required"), Rule(Physics, "excluded") } }));
-                CatalogDocument.ClearBuiltInModuleRules(path, new[] { Audio });
-                var result = CatalogDocument.Load(path);
-                Assert.That(result.packages, Has.Length.EqualTo(1));
-                Assert.That(result.builtInModules.Single().name, Is.EqualTo(Physics));
-            }
-            finally { File.Delete(path); }
+            Assert.Throws<FormatException>(() => BuiltInPresetDocument.Parse("mixed.upcbuiltinjson", "{\"schemaVersion\":1,\"displayName\":\"Mixed\",\"packages\":[],\"builtInModules\":[]}"));
+            Assert.Throws<FormatException>(() => BuiltInPresetDocument.Parse("preset.upcjson", JsonUtility.ToJson(new BuiltInPresetDocument { displayName = "Test", builtInModules = Array.Empty<BuiltInModuleRule>() })));
+        }
+        [Test] public void VersionDifferenceExplainsCurrentEditorValidation()
+        {
+            var preset = new BuiltInPresetDocument { unityVersion = "2019.4.0f1" };
+            Assert.That(preset.VersionNotice, Does.Contain("2019.4.0f1").And.Contain(Application.unityVersion));
+        }
+        [Test] public void UnlistedModulesAreNotChanged()
+        {
+            var modules = new[] { Module(Audio), Module(Physics) };
+            var plan = BuiltInModulePlan.Create(new[] { Rule(Audio, "excluded") }, modules, modules);
+            Assert.That(plan.remove, Is.EqualTo(new[] { Audio }));
+            Assert.That(plan.add, Is.Empty);
         }
         [Test] public void NonBuiltInPackageCannotSatisfyModuleRule()
         {
@@ -140,10 +140,15 @@ namespace UnityPackageCatalog.Tests
         }
         [UnityTest] public IEnumerator NativeDiscoveryAndPreviewFindBuiltInModuleWithoutChangingProject()
         {
-            var path = Path.Combine(Path.GetTempPath(), "upc-modules-preview-" + Guid.NewGuid() + ".json");
+            var path = "Assets/UPCModulePreview_" + Guid.NewGuid().ToString("N") + ".upcbuiltinjson";
+            var previousEnabled = CatalogSettings.Enabled;
             try
             {
-                File.WriteAllText(path, JsonUtility.ToJson(new CatalogDocument { displayName = "Test", packages = Array.Empty<CatalogEntry>(), builtInModules = new[] { Rule(Audio, "required") } }));
+                File.WriteAllText(path, JsonUtility.ToJson(new BuiltInPresetDocument { displayName = "Test", builtInModules = new[] { Rule(Audio, "required") } }));
+                UnityEditor.AssetDatabase.ImportAsset(path);
+                CatalogSettings.SetEnabled(false);
+                Assert.That(CatalogRegistry.AssetPaths(), Does.Not.Contain(path));
+                Assert.That(BuiltInPresetDocument.AssetPaths(), Does.Contain(path));
                 BuiltInModuleRequirements.Check(path);
                 var deadline = UnityEditor.EditorApplication.timeSinceStartup + 90;
                 while (BuiltInModuleRequirements.Busy && UnityEditor.EditorApplication.timeSinceStartup < deadline) yield return null;
@@ -151,7 +156,7 @@ namespace UnityPackageCatalog.Tests
                 Assert.That(BuiltInModuleRequirements.Status, Does.Not.Contain("failed").And.Not.Contain("unavailable"));
                 Assert.That(BuiltInModuleRequirements.Status, Does.Contain("satisfied").Or.Contain("Enable:"));
             }
-            finally { File.Delete(path); }
+            finally { UnityEditor.AssetDatabase.DeleteAsset(path); CatalogSettings.SetEnabled(previousEnabled); }
         }
     }
 }
