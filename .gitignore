@@ -104,3 +104,11 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# Package Catalog local development files
+.DS_Store
+.vscode/
+.idea/
+TestResults/
+LocalCatalogs/
+*.private.json

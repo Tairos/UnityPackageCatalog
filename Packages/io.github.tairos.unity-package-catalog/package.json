@@ -1,0 +1,18 @@
+{
+  "name": "io.github.tairos.unity-package-catalog",
+  "version": "0.1.0-experimental.1",
+  "displayName": "Unity Package Catalog",
+  "description": "An experimental Git and Asset Store catalogue inside Unity's native Package Manager. Tested against Unity 6000.6.0f1.",
+  "unity": "6000.6",
+  "samples": [
+    {
+      "displayName": "Local catalogue smoke test",
+      "description": "Two harmless local packages for testing without Git credentials.",
+      "path": "Samples~/LocalCatalog"
+    }
+  ],
+  "author": {
+    "name": "Tairos",
+    "url": "https://github.com/Tairos"
+  }
+}
