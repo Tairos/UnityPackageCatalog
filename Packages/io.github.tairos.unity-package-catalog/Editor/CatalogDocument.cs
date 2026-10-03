@@ -12,6 +12,7 @@ namespace UnityPackageCatalog
         public int schemaVersion = 1;
         public string displayName;
         public CatalogEntry[] packages;
+        public BuiltInModuleRule[] builtInModules;
 
         public static CatalogDocument Load(string path)
         {
@@ -33,6 +34,36 @@ namespace UnityPackageCatalog
             }
             if (added == 0) return 0;
             document.packages = entries.ToArray();
+            Save(path, document);
+            return added;
+        }
+
+        public static void SetBuiltInModuleRules(string path, BuiltInModuleRule[] additions)
+        {
+            var document = Load(path);
+            var rules = new List<BuiltInModuleRule>(document.builtInModules ?? Array.Empty<BuiltInModuleRule>());
+            foreach (var rule in additions)
+            {
+                if (rule == null) throw new FormatException("A built-in module rule cannot be null.");
+                rules.RemoveAll(existing => existing.name == rule.name);
+                rules.Add(rule);
+            }
+            document.builtInModules = rules.ToArray();
+            Save(path, document);
+        }
+
+        public static void ClearBuiltInModuleRules(string path, string[] names)
+        {
+            var document = Load(path);
+            var selected = new HashSet<string>(names, StringComparer.Ordinal);
+            var rules = new List<BuiltInModuleRule>(document.builtInModules ?? Array.Empty<BuiltInModuleRule>());
+            rules.RemoveAll(rule => selected.Contains(rule.name));
+            document.builtInModules = rules.ToArray();
+            Save(path, document);
+        }
+
+        static void Save(string path, CatalogDocument document)
+        {
             var json = JsonUtility.ToJson(document, true);
             Parse(path, json); // Validate the complete result before modifying the private file.
             var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
@@ -42,7 +73,6 @@ namespace UnityPackageCatalog
                 File.Replace(temporary, path, null);
             }
             finally { if (File.Exists(temporary)) File.Delete(temporary); }
-            return added;
         }
 
         internal static CatalogDocument Parse(string path, string json)
@@ -54,6 +84,7 @@ namespace UnityPackageCatalog
                 throw new FormatException("Expected catalogue schemaVersion 1.");
             if (string.IsNullOrWhiteSpace(document.displayName) || document.packages == null)
                 throw new FormatException("A catalogue needs displayName and packages.");
+            BuiltInModuleRule.Validate(document.builtInModules);
             var names = new HashSet<string>(StringComparer.Ordinal);
             var productIds = new HashSet<long>();
             for (var index = 0; index < document.packages.Length; index++)
@@ -83,6 +114,26 @@ namespace UnityPackageCatalog
                 }
             }
             return document;
+        }
+    }
+
+    [Serializable]
+    public sealed class BuiltInModuleRule
+    {
+        public string name;
+        public string requirement;
+
+        public static void Validate(BuiltInModuleRule[] rules)
+        {
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var rule in rules ?? Array.Empty<BuiltInModuleRule>())
+            {
+                if (rule == null || !Regex.IsMatch(rule.name ?? "", @"^com\.unity\.modules\.[a-z0-9]+$"))
+                    throw new FormatException("Built-in module rules need a com.unity.modules.* package ID.");
+                if (!names.Add(rule.name)) throw new FormatException("Duplicate or conflicting built-in module rule: " + rule.name);
+                if (rule.requirement != "required" && rule.requirement != "excluded")
+                    throw new FormatException(rule.name + ": requirement must be required or excluded.");
+            }
         }
     }
 

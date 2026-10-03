@@ -98,7 +98,7 @@ No private repository is bundled or accessed by the demo. Example URLs are ficti
 - A package already known to Unity is shown with Unity's existing data; catalogue metadata does not overwrite it. Check the native Source/Installed From information if the same package ID exists elsewhere.
 - Native labels such as “Installed From” may appear for available local/Git entries before installation. The Install/Manage controls and installed indicator determine actual state.
 - The catalogue uses native buttons, not the original checkbox/batch-preset idea.
-- Asset Store entries use Unity-owned records and its normal Download/Import controls. Built-in module configuration and registry hosting are not implemented.
+- Asset Store entries use Unity-owned records and its normal Download/Import controls. Built-in engine modules can be required/excluded through catalogue rules; registry hosting is not implemented.
 - This milestone does not validate private GitHub credentials or claim compatibility beyond the tested Editor.
 
 To disable, use **Package Catalog Settings → Disable integration**. That removes this tool's source and synthetic entries, not packages you installed. If an Editor update breaks the adapter, it stops and reports a diagnostic in settings/Console. See [the architecture notes](Documentation~/ARCHITECTURE.md) before porting it.
@@ -124,3 +124,24 @@ Omit `name`, `source` and `version` for these entries. The display name is optio
 This is a curated selection, rather than an automatic mirror of your entire account. Catalogue files contain references, not licensed asset files or credentials. Unity performs all entitlement checks, downloads and imports. Adding an entry never downloads or imports it automatically. Import opens Unity's usual asset import workflow; removal follows whichever native controls Unity provides for that asset rather than UPM dependency removal. Disabling the integration leaves Unity's asset records and imported content intact.
 
 Package identity: `io.github.tairos.unity-package-catalog`. Maintained by [Tairos](https://github.com/Tairos). The lowercase reverse-domain identifier is distinct from the display name and the Git repository URL.
+
+## Require or exclude built-in modules
+
+In Package Catalog Settings, choose an external catalogue, click **Browse Built-in modules**, and select modules in Unity's native Built-in list. Back in settings, choose **Require selected Built-in modules** or **Exclude selected Built-in modules**. Use **Clear requirements for selected Built-in modules** to leave their state unmanaged again.
+
+These actions save rules and enable the catalogue; they do not enable or disable modules immediately. Click **Check module requirements / preview changes**, then **Apply module requirements** to apply the valid plan through Unity's Package Manager. Ruled modules appear alongside packages in the catalogue using Unity's normal details and Enable/Disable controls.
+
+Rules are optional top-level JSON metadata and can coexist with Git/local and Asset Store entries:
+
+```json
+"builtInModules": [
+  { "name": "com.unity.modules.audio", "requirement": "required" },
+  { "name": "com.unity.modules.vehicles", "requirement": "excluded" }
+]
+```
+
+`required` means enabled; `excluded` means absent from the resolved dependency graph, including indirect dependencies. Only built-in engine IDs under `com.unity.modules.*` are supported. Duplicate/conflicting rules and unknown requirements are rejected. The installed Editor supplies the module version.
+
+The tool reports conflicts before applying anything when a retained package or another required module needs an excluded module. Exclude dependent built-in modules together where appropriate; other dependent packages must be managed separately. This tool needs JSONSerialize and declares it as a dependency, so `com.unity.modules.jsonserialize` cannot be excluded while the tool is installed.
+
+Native Enable/Disable controls remain available. When the active catalogue is enabled, a build check stops builds if its required/excluded rules are violated. Loading, reloading, or editing a catalogue never applies module changes automatically. Disabling the catalogue stops enforcement and leaves module states unchanged. Settings remain local to this computer/project; CI or another user's Editor must configure and enable the intended catalogue too. Disabling an engine module can make project scripts that use its APIs fail compilation, so preview the dependency plan and test changes in a disposable project first.

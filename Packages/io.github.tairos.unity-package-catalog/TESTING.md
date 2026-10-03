@@ -7,7 +7,7 @@ In the running **Unity 6000.6.0f1** Editor:
 | Check | Result |
 |---|---|
 | Embedded package compiles | Passed |
-| Catalogue validation and update tests | 24 passed, 0 failed |
+| Catalogue validation and update tests | 44 passed, 0 failed |
 | Named source beneath Sources | Passed; inspected in the actual window |
 | Two uninstalled entries in Unity's native list/details | Passed |
 | Native search filters to one matching entry | Passed |
@@ -73,3 +73,11 @@ Catalogue edits are checked while Package Manager is open (approximately every 0
 - The My Assets selection action added an owned item to a temporary external catalogue. No asset was downloaded or imported as part of this check.
 - An already downloaded owned asset showed an enabled, visible native Import control under the custom source. Complete an actual download/import in a disposable project before release.
 - Check sign-out/sign-in, an unowned or unavailable product ID, network failure/retry, hidden purchases, and removal/reimport before release. These lifecycle scenarios are not claimed as verified by validation tests.
+
+## Built-in module requirement checks
+
+- Full EditMode suite: 44 passed, including schema validation, required/excluded plans, unavailable modules, direct and indirect dependency conflicts, removing dependent modules together, the tool's JSONSerialize dependency, build enforcement, safe rule editing/clearing, and preservation of rules when adding Asset Store entries.
+- An asynchronous discovery/preview test exercised Unity's real SearchAll/List APIs without mutating the development project's modules.
+- Disposable consumer smoke test: excluded `com.unity.modules.vehicles`, verified it absent, required it again, and verified restoration through the catalogue Apply service and native UPM. The consumer manifest returned to its original contents. The apply service keeps the rule snapshot across domain reload and verifies the result rather than repeating the mutation.
+- Manual UI check: browse Built-in, select modules, save required/excluded rules, preview the plan, apply it, and confirm the same native module records appear in the catalogue. Violate a rule with native controls and confirm the build check reports it. Clear the rule or disable integration and confirm the module state is not changed automatically.
+- The supplied demo catalogue intentionally has no module rules, so trying the demo never changes engine modules.

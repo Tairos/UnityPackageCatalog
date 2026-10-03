@@ -14,5 +14,8 @@
   "author": {
     "name": "Tairos",
     "url": "https://github.com/Tairos"
+  },
+  "dependencies": {
+    "com.unity.modules.jsonserialize": "1.0.0"
   }
 }

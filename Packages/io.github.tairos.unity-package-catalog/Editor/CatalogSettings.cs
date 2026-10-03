@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using UnityEditor;
@@ -49,14 +50,34 @@ namespace UnityPackageCatalog
 
         public static int AddSelectedAssets(string path)
         {
-            var fullPath = Path.GetFullPath(path);
-            var toolPath = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(CatalogSettings).Assembly).resolvedPath;
-            if (fullPath.StartsWith(Path.GetFullPath(toolPath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.Ordinal))
-                throw new InvalidOperationException("Choose a private catalogue outside the tool package. Use Create private catalogue first if you are using the demo.");
+            var fullPath = RequireExternalCatalogue(path);
             var selected = NativeCatalogBridge.SelectedOwnedAssets();
             var count = CatalogDocument.AddAssetStoreEntries(fullPath, selected);
             Configure(fullPath, true);
             return count;
+        }
+
+        static string RequireExternalCatalogue(string path)
+        {
+            var fullPath = Path.GetFullPath(path);
+            var toolPath = UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(CatalogSettings).Assembly).resolvedPath;
+            if (fullPath.StartsWith(Path.GetFullPath(toolPath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                throw new InvalidOperationException("Choose a private catalogue outside the tool package. Use Create private catalogue first if you are using the demo.");
+            return fullPath;
+        }
+
+        public static void SetSelectedModuleRequirements(string path, string requirement)
+        {
+            var fullPath = RequireExternalCatalogue(path);
+            CatalogDocument.SetBuiltInModuleRules(fullPath, NativeCatalogBridge.SelectedBuiltInModules(requirement));
+            Configure(fullPath, true);
+        }
+
+        public static void ClearSelectedModuleRequirements(string path)
+        {
+            var fullPath = RequireExternalCatalogue(path);
+            CatalogDocument.ClearBuiltInModuleRules(fullPath, NativeCatalogBridge.SelectedBuiltInModules("required").Select(rule => rule.name).ToArray());
+            Configure(fullPath, true);
         }
 
         [SettingsProvider]
@@ -116,6 +137,47 @@ namespace UnityPackageCatalog
                         }
                         catch (Exception error) { status.text = error.Message; }
                     }) { text = "Add selected My Assets items to catalogue" });
+                    root.Add(new HelpBox("Built-in modules can be required or excluded. Rules appear in your catalogue and are checked before builds while the catalogue is enabled. Check requirements to preview changes, then apply explicitly. Unity resolves dependencies; conflicts are reported before changes.", HelpBoxMessageType.Info));
+                    root.Add(new Button(() =>
+                    {
+                        try { NativeCatalogBridge.OpenBuiltIn(); }
+                        catch (Exception error) { status.text = error.GetBaseException().Message; }
+                    }) { text = "Browse Built-in modules" });
+                    foreach (var requirement in new[] { "required", "excluded" })
+                    {
+                        var desired = requirement;
+                        root.Add(new Button(() =>
+                        {
+                            try { SetSelectedModuleRequirements(path.value, desired); enabled.value = true; status.text = "Selected module rules saved as " + desired + ". Check and apply requirements to change the project."; }
+                            catch (Exception error) { status.text = error.Message; }
+                        }) { text = desired == "required" ? "Require selected Built-in modules" : "Exclude selected Built-in modules" });
+                    }
+                    root.Add(new Button(() =>
+                    {
+                        try { ClearSelectedModuleRequirements(path.value); enabled.value = true; status.text = "Selected modules are now unmanaged. Their project state is unchanged."; }
+                        catch (Exception error) { status.text = error.Message; }
+                    }) { text = "Clear requirements for selected Built-in modules" });
+                    var checkModules = new Button(() =>
+                    {
+                        try { BuiltInModuleRequirements.Check(path.value); }
+                        catch (Exception error) { status.text = error.Message; }
+                    }) { text = "Check module requirements / preview changes" };
+                    var applyModules = new Button(() =>
+                    {
+                        try { BuiltInModuleRequirements.Apply(path.value); }
+                        catch (Exception error) { status.text = error.Message; }
+                    }) { text = "Apply module requirements" };
+                    root.Add(checkModules);
+                    root.Add(applyModules);
+                    var moduleStatus = new Label();
+                    moduleStatus.style.whiteSpace = WhiteSpace.Normal;
+                    root.Add(moduleStatus);
+                    moduleStatus.schedule.Execute(() =>
+                    {
+                        moduleStatus.text = BuiltInModuleRequirements.Status + "\n" + BuiltInModuleRequirements.ActiveDiagnostics();
+                        checkModules.SetEnabled(!BuiltInModuleRequirements.Busy);
+                        applyModules.SetEnabled(!BuiltInModuleRequirements.Busy);
+                    }).Every(1000);
                     root.Add(status);
                     var diagnostics = new Label();
                     root.Add(diagnostics);

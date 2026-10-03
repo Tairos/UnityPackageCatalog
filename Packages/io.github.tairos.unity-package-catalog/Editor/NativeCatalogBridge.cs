@@ -79,7 +79,7 @@ namespace UnityPackageCatalog
                     SetProperty(manager, "activePage", page);
                     openRequested = false;
                 }
-                Status = "Connected to Unity " + Application.unityVersion + " · " + document.displayName + " · " + document.packages.Length + " catalogue entries. Native UI adapter is experimental.";
+                Status = "Connected to Unity " + Application.unityVersion + " · " + document.displayName + " · " + (document.packages.Length + (document.builtInModules?.Length ?? 0)) + " catalogue entries. Native UI adapter is experimental.";
                 if (refreshError != null) Status += "\n" + refreshError;
             }
             catch (Exception error)
@@ -113,7 +113,7 @@ namespace UnityPackageCatalog
                 return;
             }
             // Defer teardown while Unity owns an installation or removal in progress.
-            if (manager != null && (bool)GetProperty(Service("IPackageOperationDispatcher"), "isInstallOrUninstallInProgress"))
+            if (BuiltInModuleRequirements.Busy || (manager != null && (bool)GetProperty(Service("IPackageOperationDispatcher"), "isInstallOrUninstallInProgress")))
             {
                 observedJson = null;
                 return;
@@ -164,13 +164,14 @@ namespace UnityPackageCatalog
                 if (document.packages.Any(p => p.assetStoreProductId == id) && IsAssetOwned(id)) return true;
             }
             var name = (string)GetProperty(package, "name");
-            return document.packages.Any(p => p.assetStoreProductId == 0 && p.name == name);
+            return document.packages.Any(p => p.assetStoreProductId == 0 && p.name == name) ||
+                (document.builtInModules ?? Array.Empty<BuiltInModuleRule>()).Any(rule => rule.name == name);
         }
 
         static void EnsureEntries()
         {
             // Unity owns real installed records and operation progress. Never overwrite them.
-            if ((bool)GetProperty(Service("IPackageOperationDispatcher"), "isInstallOrUninstallInProgress")) return;
+            if (BuiltInModuleRequirements.Busy || (bool)GetProperty(Service("IPackageOperationDispatcher"), "isInstallOrUninstallInProgress")) return;
             var additions = new List<object>();
             foreach (var entry in document.packages)
             {
@@ -257,6 +258,36 @@ namespace UnityPackageCatalog
             return label + GetProperty(package, "displayName") + " · " +
                 (Invoke(cache, "GetImportedPackage", entry.assetStoreProductId) != null ? "imported" :
                  Invoke(cache, "GetLocalInfo", entry.assetStoreProductId) != null ? "downloaded; ready to import" : "owned; ready to download");
+        }
+
+        public static bool IsPackageOperationInProgress() =>
+            (bool)GetProperty(Service("IPackageOperationDispatcher"), "isInstallOrUninstallInProgress");
+
+        public static void OpenBuiltIn()
+        {
+            EditorApplication.ExecuteMenuItem("Window/Package Management/Package Manager");
+            var pageManager = Service("PageManager");
+            SetProperty(pageManager, "activePage", Invoke(pageManager, "GetPage", "BuiltIn"));
+        }
+
+        public static BuiltInModuleRule[] SelectedBuiltInModules(string requirement)
+        {
+            var pageManager = Service("PageManager");
+            var active = GetProperty(pageManager, "activePage");
+            if (active == null || (string)GetProperty(active, "id") != "BuiltIn")
+                throw new InvalidOperationException("Select modules in Package Manager's Built-in list first.");
+            var db = Service("IPackageDatabase");
+            var rules = new List<BuiltInModuleRule>();
+            foreach (string selected in (IEnumerable)Invoke(active, "GetSelection"))
+            {
+                var package = Invoke(db, "GetPackageByIdOrName", selected);
+                var name = package == null ? null : (string)GetProperty(package, "name");
+                if (name != null && name.StartsWith("com.unity.modules.", StringComparison.Ordinal))
+                    rules.Add(new BuiltInModuleRule { name = name, requirement = requirement });
+            }
+            if (rules.Count == 0) throw new InvalidOperationException("Select at least one built-in engine module first.");
+            BuiltInModuleRule.Validate(rules.ToArray());
+            return rules.ToArray();
         }
 
         public static void OpenMyAssets()
